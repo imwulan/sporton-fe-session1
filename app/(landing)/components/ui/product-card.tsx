@@ -1,19 +1,29 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { FiPlus } from "react-icons/fi";
 import Button from "./button";
+import { useCart } from "../../context/cart-context";
 
 type TProductCardProps = {
+  id: string;
   name: string;
   category: string;
   price: number;
   imgUrl: string;
 };
 
-const ProductCard = ({ name, category, price, imgUrl }: TProductCardProps) => {
+const ProductCard = ({ id, name, category, price, imgUrl }: TProductCardProps) => {
+  const { addItem } = useCart();
+
+  const handleAddToCart = () => {
+    addItem({ id, name, price, image: imgUrl }, 1);
+  };
+
   return (
     <div className="relative bg-white p-1.5 duration-300 hover:drop-shadow-xl">
-      <Link href="#" className="block">
+      <Link href={`/products/${id}`} className="block">
         <div className="relative flex aspect-square w-full items-center justify-center bg-primary-light">
           <Image
             src={`/images/products/${imgUrl}`}
@@ -38,7 +48,9 @@ const ProductCard = ({ name, category, price, imgUrl }: TProductCardProps) => {
       </Link>
 
       <Button
-        aria-label={`Add ${name} to bag`}
+        type="button"
+        onClick={handleAddToCart}
+        aria-label={`Add ${name} to cart`}
         className="absolute right-4.5 top-4.5 h-9 w-9 p-2! sm:h-10 sm:w-10"
       >
         <FiPlus className="h-5 w-5 sm:h-6 sm:w-6" />

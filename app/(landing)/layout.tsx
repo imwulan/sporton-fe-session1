@@ -3,6 +3,8 @@ import { Poppins } from "next/font/google";
 import "../globals.css";
 import Header from "./components/layouts/header";
 import Footer from "./components/layouts/footer";
+import CartPopup from "./components/cart/cart-popup";
+import { CartProvider } from "./context/cart-context";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -24,9 +26,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${poppins.variable} antialiased`}>
-        <Header />
-        {children}
-        <Footer />
+        <CartProvider>
+          <Header />
+          {children}
+          <Footer />
+          <CartPopup />
+        </CartProvider>
       </body>
     </html>
   );

@@ -1,15 +1,30 @@
-type TButtonProps = {
+import Link from "next/link";
+
+type TButtonBaseProps = {
   children: React.ReactNode;
   className?: string;
   variant?: "primary" | "dark" | "ghost";
   size?: "normal" | "small";
-} & React.ButtonHTMLAttributes<HTMLButtonElement>;
+};
+
+type TButtonAsButtonProps = TButtonBaseProps &
+  Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "href"> & {
+    href?: undefined;
+  };
+
+type TButtonAsLinkProps = TButtonBaseProps &
+  Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
+    href: string;
+  };
+
+type TButtonProps = TButtonAsButtonProps | TButtonAsLinkProps;
 
 const Button = ({
   children,
-  className,
+  className = "",
   variant = "primary",
   size = "normal",
+  href,
   ...props
 }: TButtonProps) => {
   const baseStyles =
@@ -26,10 +41,24 @@ const Button = ({
     small: "py-[10px] px-7",
   };
 
+  const combinedClassName = `${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`;
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={combinedClassName}
+        {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+      >
+        {children}
+      </Link>
+    );
+  }
+
   return (
     <button
-      className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
-      {...props}
+      className={combinedClassName}
+      {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     >
       {children}
     </button>
