@@ -6,11 +6,15 @@ type TCategoryCardProps = {
 };
 
 const CategoryCard = ({ name, imgUrl }: TCategoryCardProps) => {
+  const imageSrc = imgUrl.startsWith("http")
+    ? imgUrl
+    : `/images/categories/${imgUrl}`;
+
   return (
     <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-gradient-to-r from-[#F1F1F1] to-[#F7F7F7] duration-300 hover:scale-105">
       <div className="self-center">
         <Image
-          src={`/images/categories/${imgUrl}`}
+          src={imageSrc}
           width={86}
           height={86}
           alt={name}

@@ -8,6 +8,9 @@ import CheckoutForm from "../components/checkout/checkout-form";
 import OrderSummary from "../components/checkout/order-summary";
 import { useCart } from "../context/cart-context";
 import { SHIPPING_COST } from "../data/shipping";
+import { checkoutTransaction } from "../services/transactions-service";
+import { mapCheckoutToTransactionPayload } from "../lib/mappers";
+import { ApiError } from "../lib/api-client";
 import type { TCheckoutFormData, TCheckoutFormErrors } from "../types/checkout";
 
 const initialFormData: TCheckoutFormData = {
@@ -60,11 +63,13 @@ const validate = (values: TCheckoutFormData): TCheckoutFormErrors => {
 };
 
 export default function CheckoutPage() {
-  const { items, subtotal, setCheckoutInfo } = useCart();
+  const { items, subtotal, setCheckoutInfo, setTransaction } = useCart();
   const router = useRouter();
 
   const [formData, setFormData] = useState<TCheckoutFormData>(initialFormData);
   const [errors, setErrors] = useState<TCheckoutFormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -74,7 +79,7 @@ export default function CheckoutPage() {
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const validationErrors = validate(formData);
@@ -84,8 +89,29 @@ export default function CheckoutPage() {
       return;
     }
 
-    setCheckoutInfo(formData);
-    router.push("/payment");
+    setSubmitError(null);
+    setIsSubmitting(true);
+
+    try {
+      const totalPayment = subtotal + SHIPPING_COST;
+      const payload = mapCheckoutToTransactionPayload(
+        formData,
+        items,
+        totalPayment
+      );
+      const transaction = await checkoutTransaction(payload);
+
+      setCheckoutInfo(formData);
+      setTransaction(transaction);
+      router.push("/payment");
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError
+          ? error.message
+          : "Something went wrong while placing your order. Please try again."
+      );
+      setIsSubmitting(false);
+    }
   };
 
   if (items.length === 0) {
@@ -118,10 +144,19 @@ export default function CheckoutPage() {
             </div>
 
             <div className="w-full lg:w-2/5">
+              {submitError && (
+                <div
+                  role="alert"
+                  className="mb-4 border border-red-500 bg-red-50 px-4 py-3 text-sm text-red-600"
+                >
+                  {submitError}
+                </div>
+              )}
               <OrderSummary
                 items={items}
                 subtotal={subtotal}
                 shippingCost={SHIPPING_COST}
+                isSubmitting={isSubmitting}
               />
             </div>
           </div>

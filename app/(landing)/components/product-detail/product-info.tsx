@@ -5,7 +5,7 @@ import { FiShoppingBag } from "react-icons/fi";
 import Button from "../ui/button";
 import QuantityStepper from "../ui/quantity-stepper";
 import { useCart } from "../../context/cart-context";
-import type { TProduct } from "../../data/products";
+import type { TProduct } from "../../types/product";
 
 type TProductInfoProps = {
   product: TProduct;

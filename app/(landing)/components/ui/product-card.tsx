@@ -21,12 +21,21 @@ const ProductCard = ({ id, name, category, price, imgUrl }: TProductCardProps) =
     addItem({ id, name, price, image: imgUrl }, 1);
   };
 
+  // imgUrl may be a bare local filename (mock data, resolved under
+  // /public/images/products/) or a fully-qualified URL (real API data,
+  // already pointing at the backend's asset host). Both are supported
+  // so this component works unchanged for Product Detail's related
+  // products (still mock data) and the Home Page (now real API data).
+  const imageSrc = imgUrl.startsWith("http")
+    ? imgUrl
+    : `/images/products/${imgUrl}`;
+
   return (
     <div className="relative bg-white p-1.5 duration-300 hover:drop-shadow-xl">
       <Link href={`/products/${id}`} className="block">
         <div className="relative flex aspect-square w-full items-center justify-center bg-primary-light">
           <Image
-            src={`/images/products/${imgUrl}`}
+            src={imageSrc}
             alt={name}
             width={300}
             height={300}

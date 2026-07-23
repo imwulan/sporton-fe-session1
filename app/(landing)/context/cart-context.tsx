@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, useState } from "react";
 import type { TCheckoutFormData } from "../types/checkout";
+import type { TApiTransaction } from "../types/api";
 
 export type TCartItem = {
   id: string;
@@ -9,15 +10,6 @@ export type TCartItem = {
   price: number;
   image: string;
   quantity: number;
-};
-
-export type TOrderSnapshot = {
-  orderNumber: string;
-  orderDate: string;
-  items: TCartItem[];
-  subtotal: number;
-  shippingCost: number;
-  checkoutInfo: TCheckoutFormData;
 };
 
 type TAddItemInput = Omit<TCartItem, "quantity">;
@@ -35,8 +27,14 @@ type TCartContextValue = {
   decreaseQuantity: (id: string) => void;
   checkoutInfo: TCheckoutFormData | null;
   setCheckoutInfo: (info: TCheckoutFormData) => void;
-  lastOrder: TOrderSnapshot | null;
-  placeOrder: (shippingCost: number) => TOrderSnapshot | null;
+  /**
+   * The real Transaction returned by POST /transactions/checkout. This
+   * replaces Session 2's client-fabricated `lastOrder` (which used
+   * Date.now()/Math.random() to invent an order number) now that a real
+   * backend call produces a real `_id`/`status`/etc.
+   */
+  transaction: TApiTransaction | null;
+  setTransaction: (transaction: TApiTransaction) => void;
   clearCart: () => void;
 };
 
@@ -46,19 +44,15 @@ type TCartProviderProps = {
   children: React.ReactNode;
 };
 
-const generateOrderNumber = (): string => {
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `SPT-${datePart}-${randomPart}`;
-};
-
 export const CartProvider = ({ children }: TCartProviderProps) => {
   const [items, setItems] = useState<TCartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [checkoutInfo, setCheckoutInfoState] = useState<TCheckoutFormData | null>(
     null
   );
-  const [lastOrder, setLastOrder] = useState<TOrderSnapshot | null>(null);
+  const [transaction, setTransactionState] = useState<TApiTransaction | null>(
+    null
+  );
 
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
@@ -108,6 +102,10 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
     setCheckoutInfoState(info);
   };
 
+  const setTransaction = (nextTransaction: TApiTransaction) => {
+    setTransactionState(nextTransaction);
+  };
+
   const totalItems = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items]
@@ -119,32 +117,13 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
   );
 
   /**
-   * Snapshots the current cart + checkout info into `lastOrder`.
-   * Deliberately does NOT clear `items`/`checkoutInfo` — that happens
-   * separately via `clearCart()`, called from the Payment Status page
-   * after it mounts. Clearing here instead would re-trigger the Payment
-   * Page's own "checkoutInfo/items missing" guard before navigation to
-   * the success page completes, causing a redirect race.
+   * Clears the live cart + checkout form info. Deliberately does NOT
+   * clear `transaction` — the Payment Status page still needs it to
+   * display order details after this runs. Also deliberately called
+   * from the Payment Status page itself (after mount), never from the
+   * Checkout/Payment pages directly, to avoid re-triggering their own
+   * "checkoutInfo/items missing" guards mid-navigation.
    */
-  const placeOrder = (shippingCost: number): TOrderSnapshot | null => {
-    if (items.length === 0 || !checkoutInfo) {
-      return null;
-    }
-
-    const snapshot: TOrderSnapshot = {
-      orderNumber: generateOrderNumber(),
-      orderDate: new Date().toISOString(),
-      items,
-      subtotal,
-      shippingCost,
-      checkoutInfo,
-    };
-
-    setLastOrder(snapshot);
-
-    return snapshot;
-  };
-
   const clearCart = () => {
     setItems([]);
     setCheckoutInfoState(null);
@@ -163,8 +142,8 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
     decreaseQuantity,
     checkoutInfo,
     setCheckoutInfo,
-    lastOrder,
-    placeOrder,
+    transaction,
+    setTransaction,
     clearCart,
   };
 
