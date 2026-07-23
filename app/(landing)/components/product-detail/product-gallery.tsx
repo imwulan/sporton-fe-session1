@@ -11,6 +11,9 @@ type TProductGalleryProps = {
 const ProductGallery = ({ images, alt }: TProductGalleryProps) => {
   const [activeImage, setActiveImage] = useState(images[0]);
 
+  const resolveSrc = (image: string) =>
+    image.startsWith("http") ? image : `/images/products/${image}`;
+
   return (
     <div className="flex flex-col-reverse gap-4 sm:flex-row lg:gap-6">
       {images.length > 1 && (
@@ -29,7 +32,7 @@ const ProductGallery = ({ images, alt }: TProductGalleryProps) => {
               }`}
             >
               <Image
-                src={`/images/products/${image}`}
+                src={resolveSrc(image)}
                 alt={`${alt} thumbnail`}
                 width={80}
                 height={80}
@@ -42,7 +45,7 @@ const ProductGallery = ({ images, alt }: TProductGalleryProps) => {
 
       <div className="relative flex aspect-square w-full items-center justify-center bg-primary-light">
         <Image
-          src={`/images/products/${activeImage}`}
+          src={resolveSrc(activeImage)}
           alt={alt}
           width={500}
           height={500}

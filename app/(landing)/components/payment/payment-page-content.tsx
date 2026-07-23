@@ -10,7 +10,8 @@ import PaymentOrderSummary from "./payment-order-summary";
 import BankInfo from "./bank-info";
 import { useCart } from "../../context/cart-context";
 import { SHIPPING_COST } from "../../data/shipping";
-import { updateTransaction } from "../../services/transactions-service";
+import { checkoutTransaction } from "../../services/transactions-service";
+import { mapCheckoutToTransactionPayload } from "../../lib/mappers";
 import { ApiError } from "../../lib/api-client";
 import type { TBankDisplay } from "../../lib/mappers";
 
@@ -21,8 +22,7 @@ type TPaymentPageContentProps = {
 };
 
 const PaymentPageContent = ({ banks }: TPaymentPageContentProps) => {
-  const { items, subtotal, checkoutInfo, transaction, setTransaction } =
-    useCart();
+  const { items, subtotal, checkoutInfo, setTransaction } = useCart();
   const router = useRouter();
 
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -33,11 +33,15 @@ const PaymentPageContent = ({ banks }: TPaymentPageContentProps) => {
 
   const previewUrlRef = useRef<string | null>(null);
 
+  // Guards on checkoutInfo + cart items — NOT on `transaction`, because
+  // the transaction doesn't exist yet at this point. It's only created
+  // once the user submits their payment proof below (the backend
+  // requires the proof image to be present at creation time).
   useEffect(() => {
-    if (!checkoutInfo || !transaction) {
+    if (!checkoutInfo || items.length === 0) {
       router.replace("/checkout");
     }
-  }, [checkoutInfo, transaction, router]);
+  }, [checkoutInfo, items, router]);
 
   useEffect(() => {
     return () => {
@@ -47,7 +51,7 @@ const PaymentPageContent = ({ banks }: TPaymentPageContentProps) => {
     };
   }, []);
 
-  if (!checkoutInfo || !transaction) {
+  if (!checkoutInfo || items.length === 0) {
     return null;
   }
 
@@ -93,23 +97,22 @@ const PaymentPageContent = ({ banks }: TPaymentPageContentProps) => {
     setIsSubmitting(true);
 
     try {
-      const updatedTransaction = await updateTransaction(transaction._id, {
-        image: proofFile,
-        status: transaction.status,
-        purchasedItems: transaction.purchasedItems,
-        totalPayment: transaction.totalPayment,
-        customerName: transaction.customerName,
-        customerContact: transaction.customerContact,
-        customerAddress: transaction.customerAddress,
-      });
+      const totalPayment = subtotal + SHIPPING_COST;
+      const payload = mapCheckoutToTransactionPayload(
+        checkoutInfo,
+        items,
+        totalPayment,
+        proofFile
+      );
+      const transaction = await checkoutTransaction(payload);
 
-      setTransaction(updatedTransaction);
+      setTransaction(transaction);
       router.push("/payment/success");
     } catch (error) {
       setSubmitError(
         error instanceof ApiError
           ? error.message
-          : "Something went wrong while uploading your payment proof. Please try again."
+          : "Something went wrong while placing your order. Please try again."
       );
       setIsSubmitting(false);
     }
@@ -172,7 +175,7 @@ const PaymentPageContent = ({ banks }: TPaymentPageContentProps) => {
               disabled={isSubmitting}
               className="mt-6 w-full disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
             >
-              {isSubmitting ? "Uploading..." : "Confirm Payment"}
+              {isSubmitting ? "Placing Order..." : "Confirm Payment"}
             </Button>
           </div>
         </div>

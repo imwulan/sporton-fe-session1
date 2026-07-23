@@ -23,11 +23,15 @@ const CartItemRow = ({
       maximumSignificantDigits: 3,
     }).format(value);
 
+  const imageSrc = item.image.startsWith("http")
+    ? item.image
+    : `/images/products/${item.image}`;
+
   return (
     <div className="flex gap-4">
       <div className="relative flex aspect-square w-20 shrink-0 items-center justify-center bg-primary-light">
         <Image
-          src={`/images/products/${item.image}`}
+          src={imageSrc}
           alt={item.name}
           width={80}
           height={80}
@@ -47,6 +51,12 @@ const CartItemRow = ({
             <FiTrash2 size={18} />
           </button>
         </div>
+
+        {item.stock === 0 && (
+          <span className="inline-block w-fit bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+            Out of Stock
+          </span>
+        )}
 
         <div className="text-sm text-dark/60">{formatPrice(item.price)}</div>
 

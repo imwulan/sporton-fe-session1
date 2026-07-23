@@ -90,7 +90,8 @@ export const mapCartItemsToPurchasedItems = (
 export const mapCheckoutToTransactionPayload = (
   checkoutInfo: TCheckoutFormData,
   items: TCartItem[],
-  totalPayment: number
+  totalPayment: number,
+  image: File
 ): TCheckoutPayload => {
   return {
     customerName: checkoutInfo.fullName,
@@ -98,6 +99,7 @@ export const mapCheckoutToTransactionPayload = (
     customerAddress: `${checkoutInfo.address}, ${checkoutInfo.city}, ${checkoutInfo.province} ${checkoutInfo.postalCode}`,
     purchasedItems: mapCartItemsToPurchasedItems(items),
     totalPayment,
+    image,
   };
 };
 

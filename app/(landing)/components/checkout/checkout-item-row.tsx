@@ -13,11 +13,15 @@ const formatPrice = (value: number) =>
   }).format(value);
 
 const CheckoutItemRow = ({ item }: TCheckoutItemRowProps) => {
+  const imageSrc = item.image.startsWith("http")
+    ? item.image
+    : `/images/products/${item.image}`;
+
   return (
     <div className="flex gap-4">
       <div className="relative flex aspect-square w-16 shrink-0 items-center justify-center bg-primary-light">
         <Image
-          src={`/images/products/${item.image}`}
+          src={imageSrc}
           alt={item.name}
           width={64}
           height={64}

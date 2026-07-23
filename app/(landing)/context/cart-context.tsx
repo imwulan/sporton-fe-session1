@@ -3,6 +3,9 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import type { TCheckoutFormData } from "../types/checkout";
 import type { TApiTransaction } from "../types/api";
+import { getProductById } from "../services/products-service";
+import { buildAssetUrl } from "../lib/mappers";
+import { formatPrice } from "../lib/format";
 
 export type TCartItem = {
   id: string;
@@ -10,9 +13,15 @@ export type TCartItem = {
   price: number;
   image: string;
   quantity: number;
+  /**
+   * Stock last known from the backend. `null` means it hasn't been
+   * checked yet (e.g. right after adding an item, before the Cart
+   * Popup has opened and triggered a sync).
+   */
+  stock: number | null;
 };
 
-type TAddItemInput = Omit<TCartItem, "quantity">;
+type TAddItemInput = Omit<TCartItem, "quantity" | "stock">;
 
 type TCartContextValue = {
   items: TCartItem[];
@@ -36,6 +45,17 @@ type TCartContextValue = {
   transaction: TApiTransaction | null;
   setTransaction: (transaction: TApiTransaction) => void;
   clearCart: () => void;
+  /**
+   * Re-checks every cart item against GET /products/:id (the only
+   * product-detail endpoint the backend exposes — there is no /cart
+   * resource to sync against). Updates name/image/price/stock in
+   * place, clamps quantity down if stock has dropped below it, and
+   * collects human-readable messages describing what changed.
+   */
+  syncCartWithBackend: () => Promise<void>;
+  isSyncing: boolean;
+  syncWarnings: string[];
+  hasOutOfStockItem: boolean;
 };
 
 const CartContext = createContext<TCartContextValue | undefined>(undefined);
@@ -53,6 +73,8 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
   const [transaction, setTransactionState] = useState<TApiTransaction | null>(
     null
   );
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncWarnings, setSyncWarnings] = useState<string[]>([]);
 
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
@@ -69,7 +91,7 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
         );
       }
 
-      return [...prev, { ...item, quantity }];
+      return [...prev, { ...item, quantity, stock: null }];
     });
     setIsCartOpen(true);
   };
@@ -80,11 +102,20 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
 
   const increaseQuantity = (id: string) => {
     setItems((prev) =>
-      prev.map((cartItem) =>
-        cartItem.id === id
-          ? { ...cartItem, quantity: cartItem.quantity + 1 }
-          : cartItem
-      )
+      prev.map((cartItem) => {
+        if (cartItem.id !== id) {
+          return cartItem;
+        }
+
+        // Don't increase past the last known stock figure. This uses
+        // the cached `stock` from the last sync rather than making a
+        // fresh request on every click.
+        if (cartItem.stock !== null && cartItem.quantity >= cartItem.stock) {
+          return cartItem;
+        }
+
+        return { ...cartItem, quantity: cartItem.quantity + 1 };
+      })
     );
   };
 
@@ -116,6 +147,83 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
     [items]
   );
 
+  const hasOutOfStockItem = useMemo(
+    () => items.some((item) => item.stock === 0),
+    [items]
+  );
+
+  /**
+   * There is no /cart endpoint on this backend, so "syncing the cart"
+   * means re-fetching each item individually via GET /products/:id —
+   * the only endpoint that has current price/stock/name/image. Runs
+   * one request per distinct cart item, in parallel.
+   */
+  const syncCartWithBackend = async () => {
+    if (items.length === 0) {
+      setSyncWarnings([]);
+      return;
+    }
+
+    setIsSyncing(true);
+    const warnings: string[] = [];
+
+    try {
+      const syncedItems = await Promise.all(
+        items.map(async (item) => {
+          try {
+            const apiProduct = await getProductById(item.id);
+
+            if (!apiProduct) {
+              warnings.push(`${item.name} is no longer available.`);
+              return { ...item, stock: 0 };
+            }
+
+            const latestName = apiProduct.name;
+            const latestImage = buildAssetUrl(apiProduct.imageUrl);
+            const latestPrice = apiProduct.price;
+            const latestStock = apiProduct.stock;
+
+            let nextQuantity = item.quantity;
+
+            if (latestStock === 0) {
+              warnings.push(`${latestName} is now out of stock.`);
+            } else if (latestStock < item.quantity) {
+              warnings.push(
+                `${latestName} quantity was reduced from ${item.quantity} to ${latestStock} (only ${latestStock} left in stock).`
+              );
+              nextQuantity = latestStock;
+            }
+
+            if (latestPrice !== item.price) {
+              warnings.push(
+                `${latestName}'s price was updated to ${formatPrice(latestPrice)}.`
+              );
+            }
+
+            return {
+              ...item,
+              name: latestName,
+              image: latestImage,
+              price: latestPrice,
+              stock: latestStock,
+              quantity: nextQuantity,
+            };
+          } catch {
+            // This one item's check failed (network/API error) — keep
+            // its existing data rather than losing it or blocking the
+            // rest of the cart from syncing.
+            return item;
+          }
+        })
+      );
+
+      setItems(syncedItems);
+      setSyncWarnings(warnings);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   /**
    * Clears the live cart + checkout form info. Deliberately does NOT
    * clear `transaction` — the Payment Status page still needs it to
@@ -127,6 +235,7 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
   const clearCart = () => {
     setItems([]);
     setCheckoutInfoState(null);
+    setSyncWarnings([]);
   };
 
   const value: TCartContextValue = {
@@ -145,6 +254,10 @@ export const CartProvider = ({ children }: TCartProviderProps) => {
     transaction,
     setTransaction,
     clearCart,
+    syncCartWithBackend,
+    isSyncing,
+    syncWarnings,
+    hasOutOfStockItem,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

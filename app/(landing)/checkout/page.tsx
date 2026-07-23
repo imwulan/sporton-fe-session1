@@ -8,9 +8,6 @@ import CheckoutForm from "../components/checkout/checkout-form";
 import OrderSummary from "../components/checkout/order-summary";
 import { useCart } from "../context/cart-context";
 import { SHIPPING_COST } from "../data/shipping";
-import { checkoutTransaction } from "../services/transactions-service";
-import { mapCheckoutToTransactionPayload } from "../lib/mappers";
-import { ApiError } from "../lib/api-client";
 import type { TCheckoutFormData, TCheckoutFormErrors } from "../types/checkout";
 
 const initialFormData: TCheckoutFormData = {
@@ -63,13 +60,11 @@ const validate = (values: TCheckoutFormData): TCheckoutFormErrors => {
 };
 
 export default function CheckoutPage() {
-  const { items, subtotal, setCheckoutInfo, setTransaction } = useCart();
+  const { items, subtotal, setCheckoutInfo, hasOutOfStockItem } = useCart();
   const router = useRouter();
 
   const [formData, setFormData] = useState<TCheckoutFormData>(initialFormData);
   const [errors, setErrors] = useState<TCheckoutFormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -79,8 +74,12 @@ export default function CheckoutPage() {
     setErrors((prev) => ({ ...prev, [name]: undefined }));
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (hasOutOfStockItem) {
+      return;
+    }
 
     const validationErrors = validate(formData);
     setErrors(validationErrors);
@@ -89,29 +88,13 @@ export default function CheckoutPage() {
       return;
     }
 
-    setSubmitError(null);
-    setIsSubmitting(true);
-
-    try {
-      const totalPayment = subtotal + SHIPPING_COST;
-      const payload = mapCheckoutToTransactionPayload(
-        formData,
-        items,
-        totalPayment
-      );
-      const transaction = await checkoutTransaction(payload);
-
-      setCheckoutInfo(formData);
-      setTransaction(transaction);
-      router.push("/payment");
-    } catch (error) {
-      setSubmitError(
-        error instanceof ApiError
-          ? error.message
-          : "Something went wrong while placing your order. Please try again."
-      );
-      setIsSubmitting(false);
-    }
+    // The actual POST /transactions/checkout call happens on the
+    // Payment step, not here — the backend requires the payment proof
+    // image to be present in that same request (confirmed against the
+    // live API), which doesn't exist yet at this point in the flow.
+    // This step only validates and stores the customer/shipping info.
+    setCheckoutInfo(formData);
+    router.push("/payment");
   };
 
   if (items.length === 0) {
@@ -144,19 +127,20 @@ export default function CheckoutPage() {
             </div>
 
             <div className="w-full lg:w-2/5">
-              {submitError && (
+              {hasOutOfStockItem && (
                 <div
                   role="alert"
                   className="mb-4 border border-red-500 bg-red-50 px-4 py-3 text-sm text-red-600"
                 >
-                  {submitError}
+                  One or more items in your cart are out of stock. Please
+                  return to your cart and remove them before checking out.
                 </div>
               )}
               <OrderSummary
                 items={items}
                 subtotal={subtotal}
                 shippingCost={SHIPPING_COST}
-                isSubmitting={isSubmitting}
+                disabled={hasOutOfStockItem}
               />
             </div>
           </div>

@@ -7,19 +7,16 @@ export type TCheckoutPayload = {
   customerAddress: string;
   purchasedItems: TApiPurchasedItem[];
   totalPayment: number;
+  image: File;
 };
 
 /**
- * POST /transactions/checkout. The endpoint is documented as
- * multipart/form-data and also lists an `image` field alongside the
- * customer/order fields — but Swagger doesn't indicate per-field
- * requiredness for multipart bodies here, only that a body is required
- * overall. Since payment proof is uploaded on a separate Payment step
- * (preserving the existing Session 2 flow), this call is sent WITHOUT
- * an image. If the backend actually rejects transaction creation
- * without one, that's the first thing to verify against the live API —
- * the resulting error will surface through ApiError either way, not
- * fail silently.
+ * POST /transactions/checkout. CONFIRMED against the live backend (not
+ * just Swagger's ambiguous per-field requiredness): calling this
+ * without `image` returns "Payment proof image is required". So the
+ * proof file must exist before this call can succeed — the UI has
+ * been restructured so this is only ever called from the Payment step
+ * (where a proof file is guaranteed by validation), not from Checkout.
  */
 export const checkoutTransaction = async (
   payload: TCheckoutPayload
@@ -30,6 +27,7 @@ export const checkoutTransaction = async (
   formData.append("customerAddress", payload.customerAddress);
   formData.append("purchasedItems", JSON.stringify(payload.purchasedItems));
   formData.append("totalPayment", String(payload.totalPayment));
+  formData.append("image", payload.image);
 
   return apiPostFormData<TApiTransaction>("/transactions/checkout", formData);
 };

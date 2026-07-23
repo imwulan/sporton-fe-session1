@@ -8,6 +8,7 @@ type TOrderSummaryProps = {
   subtotal: number;
   shippingCost: number;
   isSubmitting?: boolean;
+  disabled?: boolean;
 };
 
 const OrderSummary = ({
@@ -15,6 +16,7 @@ const OrderSummary = ({
   subtotal,
   shippingCost,
   isSubmitting = false,
+  disabled = false,
 }: TOrderSummaryProps) => {
   return (
     <div className="flex flex-col gap-6 bg-primary-light p-5 sm:p-6">
@@ -32,7 +34,7 @@ const OrderSummary = ({
 
       <Button
         type="submit"
-        disabled={isSubmitting}
+        disabled={isSubmitting || disabled}
         className="w-full disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
       >
         {isSubmitting ? "Placing Order..." : "Place Order"}
